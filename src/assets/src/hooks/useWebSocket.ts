@@ -35,6 +35,8 @@ export const useWebSocket = <T>(url: string, onUpdate: (content: T) => void, onD
             }
         }
         ws.onclose = (e: CloseEvent) => {
+            console.log("ws.onclose");
+            console.log(e.code);
             if (e.code === 1000) return;
             console.error(e);
             setError(new Error(closeCodes[e.code] ?? e.code.toString()));
@@ -47,6 +49,7 @@ export const useWebSocket = <T>(url: string, onUpdate: (content: T) => void, onD
     }
     const [ws, setWs] = useState(buildWebSocket);
     useEffect(() => {
+        console.log(ws);
         console.log("Setting up reconnect for new websocket...");
         const handleVisibilityChange = () => {
             console.log("handleVisibilityChange");
@@ -57,6 +60,7 @@ export const useWebSocket = <T>(url: string, onUpdate: (content: T) => void, onD
             if (!document.hidden && ws.readyState === 3) {
                 console.log("Reconnecting...");
                 setError(undefined);
+                document.removeEventListener("visibilitychange", handleVisibilityChange);        
                 setWs(buildWebSocket);
             } else {
                 console.log("Don't reconnect.");
@@ -64,9 +68,8 @@ export const useWebSocket = <T>(url: string, onUpdate: (content: T) => void, onD
         }
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
-            console.log("Cleaning up websocket...");
+            console.log("Cleaning up after websocket...");
             ws.close();
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
         }
     }, [ws]);
     return error;
