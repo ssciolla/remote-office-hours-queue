@@ -50,10 +50,16 @@ export const useWebSocket = <T>(url: string, onUpdate: (content: T) => void, onD
         console.log("Setting up reconnect for new websocket...");
         const handleVisibilityChange = () => {
             console.log("handleVisibilityChange");
+            console.log("document.hidden");
+            console.log(document.hidden);
+            console.log("ws.readyState");
+            console.log(ws.readyState);
             if (!document.hidden && ws.readyState === 3) {
                 console.log("Reconnecting...");
                 setError(undefined);
                 setWs(buildWebSocket);
+            } else {
+                console.log("Don't reconnect.");
             }
         }
         document.addEventListener("visibilitychange", handleVisibilityChange);
