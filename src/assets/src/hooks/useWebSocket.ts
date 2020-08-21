@@ -12,6 +12,9 @@ const closeCodes = {
 
 export const useWebSocket = <T>(url: string, onUpdate: (content: T) => void, onDelete?: (setError: (React.Dispatch<React.SetStateAction<Error | undefined>>)) => void) => {
     const [error, setError] = useState(undefined as Error | undefined);
+    const [delayedReconnect, setDelayedReconnect] = useState(null as null | boolean);
+    console.log('delayedReconnect: ' + delayedReconnect)
+    
     const buildWebSocket = () => {
         console.log("Building websocket...");
         const ws = new WebSocket(url);
@@ -36,41 +39,39 @@ export const useWebSocket = <T>(url: string, onUpdate: (content: T) => void, onD
         }
         ws.onclose = (e: CloseEvent) => {
             console.log("ws.onclose");
+            console.log(e)
             console.log(e.code);
+            console.log(navigator.userAgent)
             if (e.code === 1000) return;
-            console.error(e);
-            setError(new Error(closeCodes[e.code] ?? e.code.toString()));
+            if (e.code === 1006) {
+                console.log('Will try to reconnect after abnormal CloseEvent')
+                setDelayedReconnect(true)
+            } else {
+                console.error(e);
+                setError(new Error(closeCodes[e.code] ?? e.code.toString()));    
+            }
         }
         ws.onerror = (e: Event) => {
+            console.log("ws.onerror")
             console.error(e);
             setError(new Error(e.toString()));
         }
+        setError(undefined);
+        console.log(ws)
         return ws;
     }
     const [ws, setWs] = useState(buildWebSocket);
+
     useEffect(() => {
-        console.log(ws);
-        console.log("Setting up reconnect for new websocket...");
-        const handleVisibilityChange = () => {
-            console.log("handleVisibilityChange");
-            console.log("document.hidden");
-            console.log(document.hidden);
-            console.log("ws.readyState");
-            console.log(ws.readyState);
-            if (!document.hidden && ws.readyState === 3) {
-                console.log("Reconnecting...");
-                setError(undefined);
-                document.removeEventListener("visibilitychange", handleVisibilityChange);        
-                setWs(buildWebSocket);
-            } else {
-                console.log("Don't reconnect.");
-            }
+        if (delayedReconnect) {
+            console.log('Reconnecting!');
+            setWs(buildWebSocket);
+            setDelayedReconnect(false)
         }
-        document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
             console.log("Cleaning up after websocket...");
             ws.close();
         }
-    }, [ws]);
+    }, [delayedReconnect]);
     return error;
 }
