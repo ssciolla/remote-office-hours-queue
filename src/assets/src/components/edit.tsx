@@ -108,25 +108,46 @@ interface AddAttendeeFormProps {
 function AddAttendeeForm(props: AddAttendeeFormProps) {
     const [attendee, setAttendee] = useState("");
     const [selectedBackend, setSelectedBackend] = useState(props.defaultBackend);
+    const [isInvalid, setIsInvalid] = useState(undefined as undefined | boolean);
+    const [feedbackMessages, setFeedbackMessages] = useState([] as ReadonlyArray<string>)
+
     if (!props.allowedBackends.has(selectedBackend)) {
         setSelectedBackend(Array.from(props.allowedBackends)[0])
     }
+
+    const validateAttendee = (value: string) => {
+        const { isInvalid, messages } = validateString(value, uniqnameSchema, false);
+        setIsInvalid(isInvalid)
+        setFeedbackMessages(messages)
+        return isInvalid
+    }
+
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        props.onSubmit(attendee, selectedBackend);
-        setAttendee("");
+        // If it hasn't been validated yet, validate it now.
+        let newIsInvalid = undefined as undefined | boolean;
+        if (isInvalid === undefined) {
+            newIsInvalid = validateAttendee(attendee);
+        }
+        if (isInvalid === false || newIsInvalid === false) {
+            props.onSubmit(attendee, selectedBackend);
+            setIsInvalid(undefined);
+            setFeedbackMessages([]);
+            setAttendee(''); // Clear successful input
+        }
     }
-    const handleChange = (e: any) => setAttendee(e.currentTarget.value);
 
-    const { isInvalid, messages } = validateString(attendee, uniqnameSchema, false);
-    const isBlank = attendee.length === 0;
-    const styleAsInvalid = isInvalid && !(isBlank);  // Don't warn if blank, since it's always visible
-    const textClass = styleAsInvalid ? ' text-danger' : '';
+    const handleChange = (e: any) => {
+        const attendee = e.currentTarget.value;
+        setAttendee(attendee);
+        validateAttendee(attendee);
+    }
 
+    const feedbackTextClass = isInvalid ? ' text-danger' : '';
     let feedback;
-    if (messages && !isBlank) {
+    if (feedbackMessages) {
         // Only show one message at a time.
-        feedback = <Form.Text bsPrefix={`form-text form-feedback${textClass}`}>{messages[0]}</Form.Text>;
+        feedback = <Form.Text bsPrefix={`form-text form-feedback${feedbackTextClass}`}>{feedbackMessages[0]}</Form.Text>;
     }
 
     return (
@@ -140,7 +161,7 @@ function AddAttendeeForm(props: AddAttendeeFormProps) {
                     placeholder='Uniqname...'
                     onChange={handleChange}
                     disabled={props.disabled}
-                    isInvalid={styleAsInvalid}
+                    isInvalid={isInvalid}
                 />
                 <InputGroup.Append>
                     <MeetingBackendSelector
@@ -151,7 +172,7 @@ function AddAttendeeForm(props: AddAttendeeFormProps) {
                     />
                 </InputGroup.Append>
                 <InputGroup.Append>
-                    <Button bsPrefix="btn btn-success" type='submit' disabled={props.disabled || isInvalid}>
+                    <Button bsPrefix="btn btn-success" type='submit' disabled={props.disabled}>
                         + Add Attendee
                     </Button>
                 </InputGroup.Append>
@@ -263,10 +284,10 @@ function QueueEditor(props: QueueEditorProps) {
             <h1 className='form-inline'>
                 <span className='mr-2'>Manage: </span>
                 <EditToggleField
-                    fieldComponent={StatelessInputGroupForm}
-                    text={props.queue.name}
-                    disabled={props.disabled}
                     id='name'
+                    fieldComponent={StatelessInputGroupForm}
+                    value={props.queue.name}
+                    disabled={props.disabled}
                     onSubmit={props.onChangeName}
                     buttonType='success'
                     placeholder='New name...'
@@ -320,8 +341,8 @@ function QueueEditor(props: QueueEditorProps) {
                     <div className="col-md-6">
                         <EditToggleField
                             id='description'
+                            value={props.queue.description}
                             fieldComponent={StatelessTextAreaForm}
-                            text={props.queue.description}
                             disabled={props.disabled}
                             onSubmit={props.onChangeDescription}
                             buttonType='success'
