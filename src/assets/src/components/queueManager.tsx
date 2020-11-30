@@ -3,7 +3,7 @@ import { useState, createRef, ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCog } from "@fortawesome/free-solid-svg-icons";
-import { Alert, Badge, Button, Col, Form, InputGroup, Modal, Row, Table } from "react-bootstrap";
+import { Badge, Button, Col, Form, InputGroup, Modal, Row, Table } from "react-bootstrap";
 import Dialog from "react-bootstrap-dialog";
 
 import { 
@@ -36,23 +36,38 @@ interface MeetingEditorProps {
 
 function MeetingEditor(props: MeetingEditorProps) {
     const user = props.meeting.attendees[0];
-    const backendBadge = (
-        <Badge variant="secondary" className="mr-2">{props.backends[props.meeting.backend_type]}</Badge>
-    );
+
+    const backendBadge = <Badge variant='secondary' className='mb-1'>{props.backends[props.meeting.backend_type]}</Badge>;
+    const userString = `${user.first_name} ${user.last_name}`;
+
     const readyButton = props.meeting.assignee
         && (
-            <Button onClick={() => props.onStartMeeting(props.meeting)} disabled={props.disabled} variant="success" size="sm" className="mr-2">
-                Ready for Attendee
+            <Button
+                onClick={() => props.onStartMeeting(props.meeting)}
+                disabled={props.disabled}
+                size='sm'
+                variant='success'
+                aria-label={`${props.meeting.backend_type === 'inperson' ? 'Ready for Attendee' : 'Start Meeting with'} ${userString}`}
+            >
+                {props.meeting.backend_type === 'inperson' ? 'Ready for Attendee' : 'Start Meeting'}
             </Button>
         );
     const joinUrl = props.meeting.backend_metadata?.meeting_url;
     const joinLink = joinUrl
         && (
-            <Button href={joinUrl} target="_blank" variant="primary" size="sm" className="mr-2" aria-label={`Start Meeting with ${user.first_name} ${user.last_name}`}>
+            <Button
+                as='a'
+                href={joinUrl}
+                target='_blank'
+                variant='primary'
+                size='sm'
+                aria-label={`Join Meeting with ${userString}`}
+            >
                 Join Meeting
             </Button>
         );
-    const progressWorkflow = <Col md={3}>{joinLink || readyButton}</Col>;
+
+    const progressWorkflow = joinLink || readyButton;
     const infoButton = (
         <Button onClick={() => props.onShowMeetingInfo(props.meeting)} variant="link" size="sm" className="mr-2">
             Join Info
@@ -82,14 +97,18 @@ function MeetingEditor(props: MeetingEditorProps) {
             </td>
             <td>
                 <Row>
-                    <Col md={3}>{backendBadge}</Col>
-                    {progressWorkflow}
-                    <Col md={3}>{infoButton}</Col>
-                    <Col md={3}>
+                    <Col md={6}>{backendBadge}</Col>
+                    <Col md={6}>{infoButton}</Col>
+                </Row>
+            </td>
+            <td>
+                <Row>
+                    {progressWorkflow && <Col md={8} className='mb-1'>{progressWorkflow}</Col>}
+                    <Col md={4}>
                         <RemoveButton
                             onRemove={() => props.onRemove(props.meeting)}
                             size="sm" disabled={props.disabled}
-                            screenReaderLabel={`Remove Meeting with ${user.first_name} ${user.last_name}`}
+                            screenReaderLabel={`Remove Meeting with ${userString}`}
                         />
                     </Col>
                 </Row>
@@ -207,12 +226,13 @@ function QueueManager(props: QueueManagerProps) {
         );
     const meetingsTable = props.queue.meeting_set.length
         ? (
-            <Table bordered>
+            <Table bordered responsive>
                 <thead>
                     <tr>
                         <th scope="col" className="d-none d-sm-table-cell">Queue #</th>
                         <th scope="col">Attendee</th>
                         <th scope="col">Host</th>
+                        <th scope="col">Details</th>
                         <th scope="col">Meeting Actions</th>
                     </tr>
                 </thead>
