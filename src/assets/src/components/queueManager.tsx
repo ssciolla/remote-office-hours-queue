@@ -3,14 +3,15 @@ import { useState, createRef, ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCog } from "@fortawesome/free-solid-svg-icons";
-import { Badge, Button, Col, Form, InputGroup, Modal, Row, Table } from "react-bootstrap";
+import { Button, Col, Form, InputGroup, Modal, Row } from "react-bootstrap";
 import Dialog from "react-bootstrap-dialog";
 
 import { 
-    UserDisplay, RemoveButton, ErrorDisplay, FormError, checkForbiddenError, LoadingDisplay, DateDisplay,
+    UserDisplay, ErrorDisplay, FormError, checkForbiddenError, LoadingDisplay, DateDisplay,
     CopyField, showConfirmation, LoginDialog, Breadcrumbs, DateTimeDisplay, BlueJeansDialInMessage,
     userLoggedOnWarning
 } from "./common";
+import { MeetingsInProgressTable, MeetingsInQueueTable } from "./meetingTables";
 import { BackendSelector as MeetingBackendSelector } from "./meetingType";
 import { PageProps } from "./page";
 import { usePromise } from "../hooks/usePromise";
@@ -21,101 +22,6 @@ import { useQueueWebSocket } from "../services/sockets";
 import { recordQueueManagementEvent, redirectToLogin } from "../utils";
 import { confirmUserExists, uniqnameSchema } from "../validation";
 
-
-interface MeetingEditorProps {
-    meeting: Meeting;
-    disabled: boolean;
-    potentialAssignees: User[];
-    user: User;
-    backends: {[backend_type: string]: string};
-    onRemove: (m: Meeting) => void;
-    onShowMeetingInfo: (m: Meeting) => void;
-    onChangeAssignee: (a: User | undefined) => void;
-    onStartMeeting: (m: Meeting) => void;
-}
-
-function MeetingEditor(props: MeetingEditorProps) {
-    const user = props.meeting.attendees[0];
-
-    const backendBadge = <Badge variant='secondary' className='mb-1'>{props.backends[props.meeting.backend_type]}</Badge>;
-    const userString = `${user.first_name} ${user.last_name}`;
-
-    const readyButton = props.meeting.assignee
-        && (
-            <Button
-                onClick={() => props.onStartMeeting(props.meeting)}
-                disabled={props.disabled}
-                size='sm'
-                variant='success'
-                aria-label={`${props.meeting.backend_type === 'inperson' ? 'Ready for Attendee' : 'Start Meeting with'} ${userString}`}
-            >
-                {props.meeting.backend_type === 'inperson' ? 'Ready for Attendee' : 'Start Meeting'}
-            </Button>
-        );
-    const joinUrl = props.meeting.backend_metadata?.meeting_url;
-    const joinLink = joinUrl
-        && (
-            <Button
-                as='a'
-                href={joinUrl}
-                target='_blank'
-                variant='primary'
-                size='sm'
-                aria-label={`Join Meeting with ${userString}`}
-            >
-                Join Meeting
-            </Button>
-        );
-
-    const progressWorkflow = joinLink || readyButton;
-    const infoButton = (
-        <Button onClick={() => props.onShowMeetingInfo(props.meeting)} variant="link" size="sm" className="mr-2">
-            Join Info
-        </Button>
-    );
-    const assigneeOptions = [<option key={0} value="">Assign to Host...</option>]
-        .concat(
-            props.potentialAssignees
-                .sort((a, b) => a.id === props.user.id ? -1 : b.id === props.user.id ? 1 : 0)
-                .map(a => <option key={a.id} value={a.id}>{a.first_name} {a.last_name} ({a.username})</option>)
-        );
-    const onChangeAssignee = (e: React.ChangeEvent<HTMLSelectElement>) =>
-        e.target.value === ""
-            ? props.onChangeAssignee(undefined)
-            : props.onChangeAssignee(props.potentialAssignees.find(a => a.id === +e.target.value));
-    return (
-        <>
-            <td><UserDisplay user={user}/></td>
-            <td className="form-group">
-                <select className="form-control assign"
-                    value={props.meeting.assignee?.id ?? ""}
-                    onChange={onChangeAssignee}
-                    disabled={props.meeting.backend_metadata && !!Object.keys(props.meeting.backend_metadata).length}
-                >
-                    {assigneeOptions}
-                </select>
-            </td>
-            <td>
-                <Row>
-                    <Col md={6}>{backendBadge}</Col>
-                    <Col md={6}>{infoButton}</Col>
-                </Row>
-            </td>
-            <td>
-                <Row>
-                    {progressWorkflow && <Col md={8} className='mb-1'>{progressWorkflow}</Col>}
-                    <Col md={4}>
-                        <RemoveButton
-                            onRemove={() => props.onRemove(props.meeting)}
-                            size="sm" disabled={props.disabled}
-                            screenReaderLabel={`Remove Meeting with ${userString}`}
-                        />
-                    </Col>
-                </Row>
-            </td>
-        </>
-    );
-}
 
 interface AddAttendeeFormProps {
     allowedBackends: Set<string>;
@@ -205,51 +111,15 @@ interface QueueManagerProps {
 function QueueManager(props: QueueManagerProps) {
     const spacingClass = 'mt-4';
 
-    const meetings = props.queue.meeting_set
-        .sort((a, b) => a.id - b.id)
-        .map((m, i) =>
-            <tr key={m.id}>
-                <th scope="row" className="d-none d-sm-table-cell">{i+1}</th>
-                <MeetingEditor
-                    key={m.id}
-                    user={props.user}
-                    potentialAssignees={props.queue.hosts}
-                    meeting={m}
-                    disabled={props.disabled}
-                    backends={props.backends}
-                    onRemove={props.onRemoveMeeting}
-                    onShowMeetingInfo={props.onShowMeetingInfo}
-                    onChangeAssignee={(a: User | undefined) => props.onChangeAssignee(a, m)}
-                    onStartMeeting={() => props.onStartMeeting(m)}
-                />
-            </tr>
-        );
-    const meetingsTable = props.queue.meeting_set.length
-        ? (
-            <Table bordered responsive>
-                <thead>
-                    <tr>
-                        <th scope="col" className="d-none d-sm-table-cell">Queue #</th>
-                        <th scope="col">Attendee</th>
-                        <th scope="col">Host</th>
-                        <th scope="col">Details</th>
-                        <th scope="col">Meeting Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {meetings}
-                </tbody>
-            </Table>
-        )
-        : (
-            <>
-            <hr/>
-            <h5>No Meetings in Queue</h5>
-            <p>
-                Did you know? You can get notified by SMS (text) message when someone joins your empty queue by adding your cell phone number and enabling host notifications in your <Link to="/preferences">User Preferences</Link>. 
-            </p>
-            </>
-        );
+    let startedMeetings = [];
+    let unstartedMeetings = [];
+    for (const meeting of props.queue.meeting_set) {
+        if (meeting.status === 'started') {
+            startedMeetings.push(meeting);
+        } else {
+            unstartedMeetings.push(meeting);
+        }
+    }
 
     const currentStatus = props.queue.status === 'open';
     const absoluteUrl = `${location.origin}/queue/${props.queue.id}`;
@@ -285,7 +155,11 @@ function QueueManager(props: QueueManagerProps) {
             </Row>
             <Row noGutters className={spacingClass}>
                 <Col md={2}><div id='created'>Created</div></Col>
-                <Col md={6}><div aria-labelledby='created'><DateDisplay date={props.queue.created_at}/></div></Col>
+                <Col md={6}><div aria-labelledby='created'><DateDisplay date={props.queue.created_at} /></div></Col>
+            </Row>
+            <h2 className={spacingClass}>Meetings in Progress</h2>
+            <Row noGutters className={spacingClass}>
+                <Col md={12}><MeetingsInProgressTable meetings={startedMeetings} {...props} /></Col>
             </Row>
             <h2 className={spacingClass}>Meetings in Queue</h2>
             <Row noGutters className={spacingClass}>
@@ -301,7 +175,7 @@ function QueueManager(props: QueueManagerProps) {
                 </Col>
             </Row>
             <Row noGutters className={spacingClass}>
-                <Col md={12}><div className="table-responsive">{meetingsTable}</div></Col>
+                <Col md={12}><MeetingsInQueueTable meetings={unstartedMeetings} {...props} /></Col>
             </Row>
         </div>
     );

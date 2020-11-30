@@ -530,7 +530,7 @@ export function QueueTable (props: QueueTableProps) {
         </tr>
     ));
     return (
-        <Table bordered hover aria-label='Queue Table with Links'>
+        <Table bordered hover aria-label='Queue Table with Links' className='queue-table'>
             <thead>
                 <tr>
                     <th aria-label='Queue ID Number'>Queue ID</th>
