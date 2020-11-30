@@ -39,7 +39,7 @@ export interface Meeting {
     backend_type: "bluejeans"|"zoom"|"inperson";
     backend_metadata?: BluejeansMetadata;
     created_at: string;
-    status: "unassigned" | "assigned" | "started";
+    status: 0 | 1 | 2;  // 0 is UNASSIGNED, 1 is ASSIGNED, 2 is STARTED
 }
 
 

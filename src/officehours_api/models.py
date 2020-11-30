@@ -96,11 +96,10 @@ def get_default_backend():
     return settings.DEFAULT_BACKEND
 
 
-
 class MeetingStatus(Enum):
-    UNASSIGNED = 'unassigned'
-    ASSIGNED = 'assigned'
-    STARTED = 'started'
+    UNASSIGNED = 0
+    ASSIGNED = 1
+    STARTED = 2
 
 
 class Meeting(SafeDeleteModel):

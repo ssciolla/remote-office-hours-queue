@@ -114,7 +114,7 @@ function QueueManager(props: QueueManagerProps) {
     let startedMeetings = [];
     let unstartedMeetings = [];
     for (const meeting of props.queue.meeting_set) {
-        if (meeting.status === 'started') {
+        if (meeting.status === 2) {
             startedMeetings.push(meeting);
         } else {
             unstartedMeetings.push(meeting);
