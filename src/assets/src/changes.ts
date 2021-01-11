@@ -1,7 +1,9 @@
 import xorWith from "lodash.xorwith";
 import isEqual from "lodash.isequal";
 
-import { isMeeting, isQueueBase, isUser, Meeting, MeetingStatus, QueueBase } from "./models"
+import { diff } from 'deep-diff';
+
+import { isMeeting, isQueueBase, isUser, Meeting, MeetingStatus, QueueBase } from "./models";
 
 export type ComparableEntity = QueueBase | Meeting;
 
@@ -22,70 +24,75 @@ const propertyMap: HumanReadableMap = {
     'assignee': 'host'
 }
 
-function detectChanges<T extends ComparableEntity>(versOne: T, versTwo: T, propsToWatch: (keyof T)[]): string | undefined {
-    for (const property of propsToWatch) {
-        let valueOne = versOne[property] as T[keyof T] | string;
-        let valueTwo = versTwo[property] as T[keyof T] | string;
-        // Check for nested user objects and falsy values
-        if (isUser(valueOne)) valueOne = valueOne.username;
-        if (!valueOne) valueOne = 'None';
-        if (isUser(valueTwo)) valueTwo = valueTwo.username;
-        if (!valueTwo) valueTwo = 'None';
-        if (valueOne !== valueTwo) {
-            // Make some property strings more human readable
-            const propName = (property in propertyMap) ? propertyMap[property as string] : property;
-            return `The ${propName} changed from "${valueOne}" to "${valueTwo}".`;
+// deep-diff: https://github.com/flitbit/diff
+
+function detectChanges<T extends ComparableEntity>(versOne: T, versTwo: T, propsToWatch: (keyof T)[]): string[] {
+    const diffObjects = diff(versOne, versTwo);
+    if (!diffObjects) return [];
+    let changeMessages = [];
+    for (const diffObject of diffObjects) {
+        if (diffObject.kind === 'E') {
+            if (diffObject.path && diffObject.path.length === 1) {
+                const changedProp = diffObject.path[0];
+                if (!propsToWatch.includes(changedProp)) continue;
+                const propName = (changedProp in propertyMap) ? propertyMap[changedProp as string] : changedProp;
+                const left = isUser(diffObject.lhs) ? diffObject.lhs.username : diffObject.lhs;
+                const right = isUser(diffObject.rhs) ? diffObject.rhs.username : diffObject.rhs;
+                const message = `Its ${propName} was changed from "${left}" to "${right}".`;
+                changeMessages.push(message);
+            }
+        } else {
+            console.error('Unexpected diffObject type found: ' + diffObject.kind);
         }
     }
-    return;
+    return changeMessages;
 }
 
+function describeEntity (entity: ComparableEntity) {
+    let entityType;
+    let permIdentifier;
+    if (isMeeting(entity)) {
+        entityType = 'meeting';
+        // meeting.attendees may change in the future?
+        permIdentifier = `attendee ${entity.attendees[0].username}`;
+    } else if (isQueueBase(entity)) {
+        entityType = 'queue';
+        permIdentifier = `ID number ${entity.id}`;
+    }
+    return [entityType, permIdentifier];
+}
 
 // https://lodash.com/docs/4.17.15#xorWith
 
 export function compareEntities<T extends ComparableEntity> (oldOnes: T[], newOnes: T[]): string | undefined
 {
+    // Can we assume changes will occur one at a time?
     const symDiff = xorWith(oldOnes, newOnes, isEqual);
     if (symDiff.length === 0) return;
     const firstEntity = symDiff[0];
     const secondEntity = symDiff.length > 1 ? symDiff[1] : undefined;
 
-    let entityType;
-    let permIdentifier;
-    if (isMeeting(firstEntity)) {
-        entityType = 'meeting';
-        // meeting.attendees may change in the future?
-        permIdentifier = `attendee ${firstEntity.attendees[0].username}`;
-    } else if (isQueueBase(firstEntity)) {
-        entityType = 'queue';
-        permIdentifier = `ID number ${firstEntity.id}`;
-    } else {
-        console.error(`compareEntities was used with an unsupported type: ${firstEntity}`)
-        return;
-    }
+    const [entityType, permIdentifier] = describeEntity(firstEntity);
 
-    let message;
     if (oldOnes.length < newOnes.length) {
         return `A new ${entityType} with ${permIdentifier} was added.`;
     } else if (oldOnes.length > newOnes.length) {
         return `The ${entityType} with ${permIdentifier} was deleted.`;
-    } else {
-        let changeDetected;
-        if (secondEntity) {
-            if (isMeeting(firstEntity) && isMeeting(secondEntity)) {
-                changeDetected = detectChanges<Meeting>(firstEntity, secondEntity, meetingPropsToWatch);
-                if (!changeDetected && firstEntity.status !== secondEntity.status && secondEntity.status === MeetingStatus.STARTED) {
-                    changeDetected = 'The status indicates the meeting is now in progress.';
-                }
-            } else if (isQueueBase(firstEntity) && isQueueBase(secondEntity)) {
-                changeDetected = detectChanges<QueueBase>(firstEntity, secondEntity, queueBasePropsToWatch);
+    }
+
+    let changesDetected: string[] = [];
+    if (secondEntity) {
+        if (isMeeting(firstEntity) && isMeeting(secondEntity)) {
+            changesDetected = detectChanges<Meeting>(firstEntity, secondEntity, meetingPropsToWatch);
+            if (firstEntity.status !== secondEntity.status && secondEntity.status === MeetingStatus.STARTED) {
+                changesDetected.push('The status indicates the meeting is now in progress.');
             }
+        } else if (isQueueBase(firstEntity) && isQueueBase(secondEntity)) {
+            changesDetected = detectChanges<QueueBase>(firstEntity, secondEntity, queueBasePropsToWatch);
         }
-        message = `The ${entityType} with ${permIdentifier} was changed.`;
-        if (changeDetected) {
-            message = message + ' ' + changeDetected;
-            return message;
-        }
+    }
+    if (changesDetected.length > 0) {
+        return `The ${entityType} with ${permIdentifier} was changed ` + changesDetected.join(' ');
     }
     return;
 }
